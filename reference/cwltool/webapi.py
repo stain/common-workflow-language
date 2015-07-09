@@ -6,6 +6,7 @@ import os,os.path
 import tempfile
 import main
 from StringIO import StringIO
+import subprocess
 
 
 @route("/")
@@ -25,23 +26,37 @@ def index():
         <h1>CWLview</h1>
         <h2>Inspect Common Workflow Language workflows</h2>
         <div class="jumbotron">
-            Upload CWL file(s):
+            <p>Upload CWL file(s):</p>
             <form role="form" action="cwl" method="POST" enctype="multipart/form-data">
-            <div>
+            <p>
                 <input name="upload" type="file" multiple="multiple" accept="text/yaml,.yaml,.yml,.cwl"/>
-                </div>
+                </p>
+
                 -or-
-                <div>
+
+                <p>
                 <input name="url" type="url" class="form-control" placeholder="http://example.com/workflow.cwl" />
-                </div>
-                <div>
-                <button name="dest" value="validate" type="submit" class="btn-success btn-lg">Validate</button>
-                <button name="dest" value="rdf" type="submit" class="btn btn-primary btn-lg">RDF Turtle</button>
-                <button name="dest" value="rdf;xml" type="submit" class="btn btn-default btn-lg">RDF/XML</button>
-                <button name="dest" value="dot" type="submit" class="btn btn-default btn-lg">Graphviz</button>
-                <button name="dest" value="dot;svg" type="submit" class="btn btn-default btn-lg">svg</button>
-                <button name="dest" value="dot;png" type="submit" class="btn btn-default btn-lg">png</button>
-                </div>
+                </p>
+
+                <p>
+                <button name="dest" value="validate" type="submit" class="btn-success btn-lg disabled">Validate</button>
+                </p>
+
+                <p>
+
+                Convert to RDF:
+                <button name="dest" value="rdf" type="submit" class="btn btn-default">Turtle</button>
+                <button name="dest" value="rdf;nt" type="submit" class="btn btn-default">N-Triples</button>
+                <button name="dest" value="rdf;xml" type="submit" class="btn btn-default">RDF/XML</button>
+                <button name="dest" value="rdf;json-ld" type="submit" class="btn btn-default">JSON-LD</button>
+                </p>
+                <p>Show diagram:
+                <button name="dest" value="dot;svg" type="submit" class="btn btn-default">svg</button>
+                <button name="dest" value="dot;png" type="submit" class="btn btn-default ">png</button>
+                <button name="dest" value="dot;pdf" type="submit" class="btn btn-default">pdf</button>
+                <button name="dest" value="dot;ps" type="submit" class="btn btn-default">ps</button>
+                <button name="dest" value="dot" type="submit" class="btn btn-default    ">dot</button>
+                </p>
             </form>
         </div>
     <address>
@@ -115,7 +130,7 @@ def url_location(url):
     # Don't forget IPV6!
     return url
 
-def cmd(url, *args):
+def cmd(url, *args, **kwargs):
     # Ensure we always have --dry-run
     args = ["--dry-run"] + list(args)
 
@@ -129,7 +144,11 @@ def cmd(url, *args):
         args.append(base)
         loc = os.readlink(os.path.join(loc, MASTER_WORKFLOW))
     args.append(loc)
-    output = StringIO()
+    if "output" in kwargs:
+        output = kwargs["output"]
+        print "Yay"
+    else:
+        output = StringIO()
     status = main.main(args, output=output)
     return (status, output, base)
 
@@ -170,22 +189,30 @@ def validate(url):
 @get("/dot;<format>/<url:path>")
 @get("/dot/<url:path>")
 def dot(url, format="dot"):
-
     formats = {
+        "dot": "text/plain",
         "png": "image/png",
         "svg": "image/svg+xml",
         "ps": "application/postscript",
         "pdf": "application/pdf"
     }
+    if format not in formats:
+        raise HTTPError(404, "Format %s not supported" % format)
 
-    (status, output, base) = cmd(url, "--print-dot")
-    if status == 0:
-        if (format=="dot"):
-            response.add_header("Content-Type", rdf_formats.get(format, "text/plain"))
-            return output.getvalue()
+    dotfile = tempfile.TemporaryFile()
+    (status, _, base) = cmd(url, "--print-dot", output=dotfile)
+    if status != 0:
+        raise HTTPError(500, "Status: %s\nOutput: %s" % (status, dot.getvalue()))
 
+    response.add_header("Content-Type", formats.get(format, "text/plain"))
+    dotfile.seek(0)
+    if (format=="dot"):
+        return dotfile
+    else:
 
-    raise HTTPError(500, "Status: %s\nOutput: %s" % (status, output.getvalue()))
+        # Convert with dot
+        p = subprocess.Popen(["dot", "-T" + format], stdin=dotfile, stdout=subprocess.PIPE)
+        return p.communicate()[0]
 
 
 if __name__=="__main__":
