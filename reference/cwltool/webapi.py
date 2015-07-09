@@ -115,17 +115,24 @@ def cwl(url):
         url = url + "?" + request.query_string
     loc = url_location(url)
     args = ["--print-rdf"]
+    base = None
     if not is_absolute(url):
+        base = loc
         args.append("--basedir")
-        args.append(loc)
-        loc = os.path.join(loc, MASTER_WORKFLOW)
+        args.append(base)
+        loc = os.readlink(os.path.join(loc, MASTER_WORKFLOW))
     args.append(loc)
 
     output = StringIO()
     status = main.main(args, output=output)
     if status == 0:
         response.add_header("Content-Type", "text/turtle")
-        return output.getvalue()
+        val = output.getvalue()
+        if base:
+            ## Make it relative again
+            ## FIXME: This probably doesn't work well on Windows
+            val = val.replace("file://" + base, "")
+        return val
 
     raise HTTPError(500, "Status: %s\nOutput: %s" % (status, output.getvalue()))
 
