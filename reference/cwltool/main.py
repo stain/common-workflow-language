@@ -131,7 +131,7 @@ def single_job_executor(t, job_order, input_basedir, args, **kwargs):
         return final_output[0]
 
 
-def main(args=None, executor=single_job_executor, makeTool=workflow.defaultMakeTool, parser=None):
+def main(args=None, executor=single_job_executor, makeTool=workflow.defaultMakeTool, parser=None, output=sys.stdout):
     if args is None:
         args = sys.argv[1:]
 
@@ -158,11 +158,11 @@ def main(args=None, executor=single_job_executor, makeTool=workflow.defaultMakeT
 
     if args.print_jsonld_context:
         j = {"@context": ctx}
-        print json.dumps(j, indent=4, sort_keys=True)
+        print >>output, json.dumps(j, indent=4, sort_keys=True)
         return 0
 
     if args.print_rdfs:
-        print(g.serialize(format=args.rdf_serializer))
+        print >>output, g.serialize(format=args.rdf_serializer)
         return 0
 
     if args.print_spec:
@@ -170,9 +170,9 @@ def main(args=None, executor=single_job_executor, makeTool=workflow.defaultMakeT
         return 0
 
     if args.print_avro:
-        print "["
-        print ", ".join([json.dumps(names.names[n].to_json(), indent=4, sort_keys=True) for n in names.names])
-        print "]"
+        print >>output, "["
+        print >>output, ", ".join([json.dumps(names.names[n].to_json(), indent=4, sort_keys=True) for n in names.names])
+        print >>output, "]"
         return 0
 
     if not args.workflow:
@@ -191,7 +191,7 @@ def main(args=None, executor=single_job_executor, makeTool=workflow.defaultMakeT
         return 1
 
     if args.print_pre:
-        print json.dumps(processobj, indent=4)
+        print >>output, json.dumps(processobj, indent=4)
         return 0
 
     try:
@@ -224,11 +224,11 @@ def main(args=None, executor=single_job_executor, makeTool=workflow.defaultMakeT
         return 1
 
     if args.print_rdf:
-        printrdf(args.workflow, processobj, ctx, args.rdf_serializer)
+        printrdf(args.workflow, processobj, ctx, args.rdf_serializer, output)
         return 0
 
     if args.print_dot:
-        printdot(args.workflow, processobj, ctx, args.rdf_serializer)
+        printdot(args.workflow, processobj, ctx, args.rdf_serializer, output)
         return 0
 
     if not args.job_order:
