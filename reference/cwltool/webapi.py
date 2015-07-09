@@ -35,10 +35,12 @@ def index():
                 <input name="url" type="url" class="form-control" placeholder="http://example.com/workflow.cwl" />
                 </div>
                 <div>
-                <button name="dest" value="validate" type="submit" class="btn btn-primary btn-lg">Validate</button>
+                <button name="dest" value="validate" type="submit" class="btn-success btn-lg">Validate</button>
                 <button name="dest" value="rdf" type="submit" class="btn btn-primary btn-lg">RDF Turtle</button>
-                <button name="dest" value="rdf;n3" type="submit" class="btn btn-primary btn-lg">RDF N3</button>
-
+                <button name="dest" value="rdf;xml" type="submit" class="btn btn-default btn-lg">RDF/XML</button>
+                <button name="dest" value="dot" type="submit" class="btn btn-default btn-lg">Graphviz</button>
+                <button name="dest" value="dot;svg" type="submit" class="btn btn-default btn-lg">svg</button>
+                <button name="dest" value="dot;png" type="submit" class="btn btn-default btn-lg">png</button>
                 </div>
             </form>
         </div>
@@ -155,6 +157,36 @@ def rdf(url, format="turtle"):
         return val
 
     raise HTTPError(500, "Status: %s\nOutput: %s" % (status, output.getvalue()))
+
+@get("/validate/<url:path>")
+def validate(url):
+    (status, output, base) = cmd(url, "--verbose")
+    if status == 0:
+        response.add_header("Content-Type", rdf_formats.get(format, "text/plain"))
+        return output.getvalue()
+
+    raise HTTPError(500, "Status: %s\nOutput: %s" % (status, output.getvalue()))
+
+@get("/dot;<format>/<url:path>")
+@get("/dot/<url:path>")
+def dot(url, format="dot"):
+
+    formats = {
+        "png": "image/png",
+        "svg": "image/svg+xml",
+        "ps": "application/postscript",
+        "pdf": "application/pdf"
+    }
+
+    (status, output, base) = cmd(url, "--print-dot")
+    if status == 0:
+        if (format=="dot"):
+            response.add_header("Content-Type", rdf_formats.get(format, "text/plain"))
+            return output.getvalue()
+
+
+    raise HTTPError(500, "Status: %s\nOutput: %s" % (status, output.getvalue()))
+
 
 if __name__=="__main__":
     run(host="localhost", port=8080, debug=True, reloader=True)
