@@ -26,8 +26,12 @@ failures = 0
 def compare(a, b):
     try:
         if isinstance(a, dict):
-            if a.get("class") == "File" and not b["path"].endswith("/" + a["path"]):
-                 return False
+            if a.get("class") == "File":
+                if not b["path"].endswith("/" + a["path"]):
+                    return False
+                # ignore empty collections
+                b = {k: v for k, v in b.iteritems()
+                     if not isinstance(v, (list, dict)) or len(v) > 0}
             if len(a) != len(b):
                 return False
             for c in a:
@@ -57,12 +61,17 @@ def run_test(i, t):
     outdir = None
     try:
         if "output" in t:
-            outdir = tempfile.mkdtemp()
-            test_command = [args.tool,
-                            "--outdir=%s" % outdir,
-                            "--strict",
-                            t["tool"],
-                            t["job"]]
+            test_command = [args.tool]
+            # Add prefixes if running on MacOSX so that boot2docker writes to /Users
+            if 'darwin' in sys.platform:
+                outdir = tempfile.mkdtemp(prefix=os.path.abspath(os.path.curdir))
+                test_command.extend(["--tmp-outdir-prefix={}".format(outdir), "--tmpdir-prefix={}".format(outdir)])
+            else:
+                outdir = tempfile.mkdtemp()
+            test_command.extend(["--outdir={}".format(outdir),
+                                 "--strict",
+                                 t["tool"],
+                                 t["job"]])
             outstr = subprocess.check_output(test_command)
             out = {"output": json.loads(outstr)}
         else:
@@ -90,6 +99,10 @@ def run_test(i, t):
         print "Returned non-zero"
         failures += 1
         return
+    except yaml.scanner.ScannerError as e:
+        print """Test failed: %s""" % " ".join([pipes.quote(tc) for tc in test_command])
+        print outstr
+        print "Parse error " + str(e)
 
     pwd = os.path.abspath(os.path.dirname(t["job"]))
     # t["args"] = map(lambda x: x.replace("$PWD", pwd), t["args"])

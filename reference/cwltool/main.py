@@ -2,7 +2,7 @@
 
 import draft2tool
 import argparse
-from avro_ld.ref_resolver import loader
+from avro_ld.ref_resolver import Loader
 import json
 import os
 import sys
@@ -41,6 +41,14 @@ def arg_parser():
     parser.add_argument("--leave-container", action="store_false",
                         default=True, help="Do not delete Docker container used by jobs after they exit",
                         dest="rm_container")
+
+    parser.add_argument("--tmpdir-prefix", type=str,
+                        help="Path prefix for temporary directories",
+                        default="tmp")
+
+    parser.add_argument("--tmp-outdir-prefix", type=str,
+                        help="Path prefix for intermediate output directories",
+                        default="tmp")
 
     parser.add_argument("--rm-tmpdir", action="store_true", default=True,
                         help="Delete intermediate temporary directories (default)",
@@ -130,6 +138,15 @@ def single_job_executor(t, job_order, input_basedir, args, **kwargs):
 
         return final_output[0]
 
+def create_loader(ctx):
+    loader = Loader()
+    url_fields = []
+    for c in ctx:
+        if c != "id" and (ctx[c] == "@id") or (isinstance(ctx[c], dict) and ctx[c].get("@type") == "@id"):
+            url_fields.append(c)
+    loader.url_fields = url_fields
+    loader.idx["cwl:JsonPointer"] = {}
+    return loader
 
 def main(args=None, executor=single_job_executor, makeTool=workflow.defaultMakeTool, parser=None, output=sys.stdout):
     if args is None:
@@ -147,14 +164,7 @@ def main(args=None, executor=single_job_executor, makeTool=workflow.defaultMakeT
 
     (j, names) = process.get_schema()
     (ctx, g) = avro_ld.jsonld_context.avrold_to_jsonld_context(j)
-
-    url_fields = []
-    for c in ctx:
-        if c != "id" and (ctx[c] == "@id") or (isinstance(ctx[c], dict) and ctx[c].get("@type") == "@id"):
-            url_fields.append(c)
-
-    loader.url_fields = url_fields
-    loader.idx["cwl:JsonPointer"] = {}
+    loader = create_loader(ctx)
 
     if args.print_jsonld_context:
         j = {"@context": ctx}
@@ -237,19 +247,37 @@ def main(args=None, executor=single_job_executor, makeTool=workflow.defaultMakeT
         _logger.error("Input object required")
         return 1
 
+    if args.tmp_outdir_prefix != 'tmp':
+        # Use user defined temp directory (if it exists)
+        args.tmp_outdir_prefix = os.path.abspath(args.tmp_outdir_prefix)
+        if not os.path.exists(args.tmp_outdir_prefix):
+            _logger.error("Intermediate output directory prefix doesn't exist, reverting to default")
+            return 1
+
+    if args.tmpdir_prefix != 'tmp':
+        # Use user defined prefix (if the folder exists)
+        args.tmpdir_prefix = os.path.abspath(args.tmpdir_prefix)
+        if not os.path.exists(args.tmpdir_prefix):
+            _logger.error("Temporary directory prefix doesn't exist.")
+            return 1
+
     try:
         out = executor(t, loader.resolve_ref(args.job_order),
                        input_basedir, args,
                        conformance_test=args.conformance_test,
                        dry_run=args.dry_run,
                        outdir=args.outdir,
+                       tmp_outdir_prefix=args.tmp_outdir_prefix,
                        use_container=args.use_container,
                        pull_image=args.enable_pull,
                        rm_container=args.rm_container,
+                       tmpdir_prefix=args.tmpdir_prefix,
                        rm_tmpdir=args.rm_tmpdir,
                        makeTool=makeTool,
-                       move_outputs=args.move_outputs)
-        print json.dumps(out, indent=4)
+                       move_outputs=args.move_outputs
+                       )
+        # This is the workflow output, it needs to be written
+        sys.stdout.write(json.dumps(out, indent=4))
     except (validate.ValidationException) as e:
         _logger.error("Input object failed validation:\n%s" % e)
         if args.debug:
