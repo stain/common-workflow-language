@@ -35,7 +35,10 @@ def index():
                 <input name="url" type="url" class="form-control" placeholder="http://example.com/workflow.cwl" />
                 </div>
                 <div>
-                <input type="submit" class="btn btn-primary btn-lg" value="Convert to RDF" />
+                <button name="dest" value="validate" type="submit" class="btn btn-primary btn-lg">Validate</button>
+                <button name="dest" value="rdf" type="submit" class="btn btn-primary btn-lg">RDF Turtle</button>
+                <button name="dest" value="rdf;n3" type="submit" class="btn btn-primary btn-lg">RDF N3</button>
+
                 </div>
             </form>
         </div>
@@ -58,9 +61,10 @@ MASTER_WORKFLOW="_workflow.cwl"
 
 @post("/cwl")
 def cwl():
+    dest = request.forms.get("dest") or "validate"
     url = request.forms.get("url")
     if url:
-        return redirect("cwl/%s" % url)
+        return redirect("%s/%s" % (dest,url))
 
     uuid = str(uuid4())
     directory = directory_for_uuid(uuid)
@@ -81,7 +85,8 @@ def cwl():
 
     os.symlink(os.path.join(directory, first),
                os.path.join(directory, MASTER_WORKFLOW))
-    return redirect("cwl/%s" % uuid)
+
+    return redirect("%s/%s" % (dest,uuid))
 
 def is_absolute(url):
     u = urlparse(url)
@@ -108,13 +113,13 @@ def url_location(url):
     # Don't forget IPV6!
     return url
 
-#get("/cwl") # TODO: Handle ?url=
-@get("/cwl/<url:path>")
-def cwl(url):
+def cmd(url, *args):
+    # Ensure we always have --dry-run
+    args = ["--dry-run"] + list(args)
+
     if (request.query_string):
         url = url + "?" + request.query_string
     loc = url_location(url)
-    args = ["--print-rdf"]
     base = None
     if not is_absolute(url):
         base = loc
@@ -122,11 +127,26 @@ def cwl(url):
         args.append(base)
         loc = os.readlink(os.path.join(loc, MASTER_WORKFLOW))
     args.append(loc)
-
     output = StringIO()
     status = main.main(args, output=output)
+    return (status, output, base)
+
+
+#get("/cwl") # TODO: Handle ?url=
+@get("/rdf;<format>/<url:path>")
+@get("/rdf/<url:path>")
+def rdf(url, format="turtle"):
+
+    rdf_formats = {
+     "turtle": "text/turtle",
+     "n3": "text/turtle",
+     "xml": "application/rdf+xml",
+     "nt": "text/plain"
+    }
+
+    (status, output, base) = cmd(url, "--print-rdf", "--rdf-serializer", format)
     if status == 0:
-        response.add_header("Content-Type", "text/turtle")
+        response.add_header("Content-Type", rdf_formats.get(format, "text/plain"))
         val = output.getvalue()
         if base:
             ## Make it relative again
