@@ -38,9 +38,11 @@ def index():
                 <input name="url" type="url" class="form-control" placeholder="http://example.com/workflow.cwl" />
                 </p>
 
+                <!--
                 <p>
                 <button name="dest" value="validate" type="submit" class="btn-success btn-lg disabled">Validate</button>
                 </p>
+                -->
 
                 <p>
 
@@ -122,6 +124,10 @@ def url_location(url):
             return directory
     except ValueError:
         pass
+
+    if not "://" in url:
+        # mod_wsgi workaround, // in paths are stripped to /
+        url = url.replace(":/", "://", 1)
 
     # Not a UUID? then it should be an absolute htttp(s) URL
     if not is_absolute(url):
