@@ -35,7 +35,7 @@ def index():
                 <input name="url" type="url" class="form-control" placeholder="http://example.com/workflow.cwl" />
                 </div>
                 <div>
-                <input type="submit" class="btn btn-primary btn-lg" value="Visualize" />
+                <input type="submit" class="btn btn-primary btn-lg" value="Convert to RDF" />
                 </div>
             </form>
         </div>
