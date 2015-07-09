@@ -1,17 +1,18 @@
 import json
 from rdflib import Graph, plugin
 from rdflib.serializer import Serializer
+import sys
 
-def printrdf(workflow, wf, ctx, sr):
+def printrdf(workflow, wf, ctx, sr, output=sys.stdout):
     wf["@context"] = ctx
     g = Graph().parse(data=json.dumps(wf), format='json-ld', location=workflow)
-    print(g.serialize(format=sr))
+    print >>output, g.serialize(format=sr)
 
-def printdot(workflow, wf, ctx, sr):
+def printdot(workflow, wf, ctx, sr, output=sys.stdout):
     wf["@context"] = ctx
     g = Graph().parse(data=json.dumps(wf), format='json-ld', location=workflow)
 
-    print "digraph {"
+    print >>output, "digraph {"
 
     #g.namespace_manager.qname(predicate)
 
@@ -29,7 +30,7 @@ def printdot(workflow, wf, ctx, sr):
            }""")
 
     for step, run in qres:
-        print '"%s" [label="%s"]' % (lastpart(step), "%s (%s)" % (lastpart(step), lastpart(run)))
+        print >>output, '"%s" [label="%s"]' % (lastpart(step), "%s (%s)" % (lastpart(step), lastpart(run)))
 
     qres = g.query(
         """SELECT ?step ?inp ?source
@@ -40,9 +41,9 @@ def printdot(workflow, wf, ctx, sr):
            }""")
 
     for step, inp, source in qres:
-        print '"%s" [shape=box]' % (lastpart(inp))
-        print '"%s" -> "%s" [label="%s"]' % (lastpart(source), lastpart(inp), "")
-        print '"%s" -> "%s" [label="%s"]' % (lastpart(inp), lastpart(step), "")
+        print >>output, '"%s" [shape=box]' % (lastpart(inp))
+        print >>output, '"%s" -> "%s" [label="%s"]' % (lastpart(source), lastpart(inp), "")
+        print >>output, '"%s" -> "%s" [label="%s"]' % (lastpart(inp), lastpart(step), "")
 
     qres = g.query(
         """SELECT ?step ?out
@@ -52,8 +53,8 @@ def printdot(workflow, wf, ctx, sr):
            }""")
 
     for step, out in qres:
-        print '"%s" [shape=box]' % (lastpart(out))
-        print '"%s" -> "%s" [label="%s"]' % (lastpart(step), lastpart(out), "")
+        print >>output, '"%s" [shape=box]' % (lastpart(out))
+        print >>output, '"%s" -> "%s" [label="%s"]' % (lastpart(step), lastpart(out), "")
 
     qres = g.query(
         """SELECT ?out ?source
@@ -63,8 +64,8 @@ def printdot(workflow, wf, ctx, sr):
            }""")
 
     for out, source in qres:
-        print '"%s" [shape=octagon]' % (lastpart(out))
-        print '"%s" -> "%s" [label="%s"]' % (lastpart(source), lastpart(out), "")
+        print >>output, '"%s" [shape=octagon]' % (lastpart(out))
+        print >>output, '"%s" -> "%s" [label="%s"]' % (lastpart(source), lastpart(out), "")
 
     qres = g.query(
         """SELECT ?inp
@@ -74,7 +75,7 @@ def printdot(workflow, wf, ctx, sr):
            }""")
 
     for (inp,) in qres:
-        print '"%s" [shape=octagon]' % (lastpart(inp))
+        print >>output, '"%s" [shape=octagon]' % (lastpart(inp))
 
 
-    print "}"
+    print >>output, "}"
